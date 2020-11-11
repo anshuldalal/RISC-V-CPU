@@ -16,9 +16,9 @@ integer i;
 // Register File
 reg     [31:0]      register        [0:31];
 
-// Read Data      
-assign  RSdata_o = register[RSaddr_i];
-assign  RTdata_o = register[RTaddr_i];
+// Read Data      // mem[x00] = 0
+assign  RSdata_o = (RSaddr_i==0) ? 32'd0 : register[RSaddr_i];
+assign  RTdata_o = (RTaddr_i==0) ? 32'd0 : register[RTaddr_i];
 
 // Write Data on negedges to overcome structural hazards
 always@(negedge clk_i or posedge reset)begin
@@ -27,7 +27,7 @@ always@(negedge clk_i or posedge reset)begin
             register[i] <= 0;
     end  
     else  begin
-        if(RegWrite_i)begin
+        if(RegWrite_i && RDaddr_i != 0)   // can't write @x00
             register[RDaddr_i] <= RDdata_i;
         end
     end      
