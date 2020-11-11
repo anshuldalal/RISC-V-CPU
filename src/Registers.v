@@ -20,7 +20,7 @@ reg     [31:0]      register        [0:31];
 assign  RSdata_o = register[RSaddr_i];
 assign  RTdata_o = register[RTaddr_i];
 
-// Write Data
+// Write Data on negedges to overcome structural hazards
 always@(negedge clk_i or posedge reset)begin
     if(reset) begin
         for(i=0;i<32;i=i+1)
