@@ -1,4 +1,4 @@
-module Registers
+module RegisterFile
 // Ports
 (
     input               clk_i,
