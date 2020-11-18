@@ -9,30 +9,24 @@ always@(*)begin
 
   case(ALUOp_i)
 
-    2'b11 : begin
+    2'b11 : begin   // immediate ?????????????  
                 ALUCtrl_o = 3'b001;//add
             end
-
+            
     2'b10 : begin
         case(funct_i)
-            10'b0000000000 : begin
-                                ALUCtrl_o = 3'b001;//add
-                             end
-            10'b0100000000 : begin
-                                ALUCtrl_o = 3'b010;//sub
-                             end
-            10'b0000001000 : begin
-                                ALUCtrl_o = 3'b110;//MUL
-                             end
-            10'b0000000110 : begin
-                                ALUCtrl_o = 3'b100;//OR
-                             end
-            10'b0000000111 : begin
-                                ALUCtrl_o = 3'b011;//AND
-                             end
-            default : begin
-                        ALUCtrl_o = 3'b001;
-                      end
+            
+            10'b0000000_000 : ALUCtrl_o = 3'b001;    // ADD                          
+            10'b0100000_000 : ALUCtrl_o = 3'b010;    // SUB
+            10'b0000000_001 : ALUCtrl_o = 3'b;       // SLL
+            10'b0000000_100 : ALUCtrl_o = 3'b;       // XOR
+            10'b0000000_101 : ALUCtrl_o = 3'b011;    // SRL
+            10'b0100000_101 : ALUCtrl_o = 3'b;       // SRA
+            10'b0000000_110 : ALUCtrl_o = 3'b011;    // OR
+            10'b0000000_111 : ALUCtrl_o = 3'b;       // AND
+                       
+            default        : ALUCtrl_o = 3'b001;
+        
         endcase
     end
 
