@@ -1,15 +1,10 @@
-module HazradDetect(
-    IF_IDrs1_i,
-    IF_IDrs2_i,
-    ID_EXrd_i,
-    ID_EX_MemRead_i,
-    Hazard_o,
+module HazradDetect
+(
+    input       ID_EX_MemRead_i,
+    input [4:0] IF_ID_RS_i, IF_ID_RT_i, ID_EX_RD_i,
+    output      Hazard_o   // stall
 );
-
-input ID_EX_MemRead_i;
-input [4:0] IF_IDrs1_i, IF_IDrs2_i, ID_EXrd_i;
-output Hazard_o;
-
-assign Hazard_o = ((ID_EX_MemRead_i && (ID_EXrd_i == IF_IDrs1_i || ID_EXrd_i == IF_IDrs2_i))? 1'b1 : 1'b0);
+    // logic to detect load-use data hazard and stall the pipeline
+    assign Hazard_o = ((ID_EX_MemRead_i && (ID_EX_RD_i == IF_ID_RS_i || ID_EX_RD_i == IF_ID_RT_i))? 1'b1 : 1'b0);
 
 endmodule
