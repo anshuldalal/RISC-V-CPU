@@ -8,16 +8,16 @@ module ALU
 );
   
 parameter ADD = 3'b001;
-parameter SUB = 3'b010;
+parameter SUB = 3'b001;
 parameter SLL = 3'b010;
-parameter XOR = 3'b101;
-parameter SLR = 3'b010;
-parameter SRA = 3'b010;
-parameter OR  = 3'b100;
-parameter AND = 3'b011;
+parameter XOR = 3'b011;
+parameter SLR = 3'b100;
+parameter SRA = 3'b101;
+parameter OR  = 3'b110;
+parameter AND = 3'b111;
 parameter BLT = 3'b110;
 parameter BGE  = 3'b100;
-
+// might need 4 bits
 
 always@(*)begin
   
