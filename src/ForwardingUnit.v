@@ -6,8 +6,6 @@ module ForwardingUnit
     output reg	[1:0]	ForwardA_o, ForwardB_o
 );
 
-    // stalling logic for load-use data hazard absent
-    
 always@(*)begin
     
     ForwardA_o = 2'b00;
