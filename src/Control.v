@@ -9,7 +9,7 @@ module Control
 always@(*)begin
  case(Op_i)
 
-  7'b0010011 : begin //addi
+  7'b0010011 : begin // I-Type
                     ALUOp_o = 2'b11;
                     ALUSrc_o = 1'b1;
                     RegWrite_o = 1'b1;
@@ -19,7 +19,7 @@ always@(*)begin
                     immSelect_o = 1'b0;
                end
       
-  7'b0110011 : begin //others
+  7'b0110011 : begin // R-Type
                     ALUOp_o = 2'b10;
                     ALUSrc_o = 1'b0;
                     RegWrite_o = 1'b1;
@@ -29,7 +29,7 @@ always@(*)begin
                     immSelect_o = 1'b0;
                end
 
-  7'b1100011 : begin //beq
+  7'b1100011 : begin // B-Type 
                     ALUOp_o = 2'b01;
                     ALUSrc_o = 1'b1;
                     RegWrite_o = 1'b0;
@@ -39,7 +39,7 @@ always@(*)begin
                     immSelect_o = 1'b0;
                end
 
-  7'b0000011 : begin //lw
+  7'b0000011 : begin // Load
                     ALUOp_o = 2'b00;
                     ALUSrc_o = 1'b1;
                     MemRd_o = 1'b1;
@@ -49,7 +49,7 @@ always@(*)begin
                     immSelect_o = 1'b0;
                end
 
-  7'b0100011 : begin //sw
+  7'b0100011 : begin // Store
                     ALUOp_o = 2'b00;
                     ALUSrc_o = 1'b1;
                     MemWr_o = 1'b1;
@@ -57,29 +57,31 @@ always@(*)begin
                     MemRd_o = 1'b0;
                     MemToReg_o = 1'b0;
                     immSelect_o = 1'b1;
-  end
+                end
 
-  //---------NEW-----------
-  7'b1010111: begin //vector
-  ALUOp_o = 2'b00; //useless
-  ALUSrc_o = 1'b0;
-  RegWrite_o = 1'b1;
-  MemRd_o = 1'b0;
-  MemWr_o = 1'b0;
-  MemToReg_o = 1'b0;
-  immSelect_o = 1'b0;
-  end
-  //---------NEW-----------
+  7'b0000011 : begin // LUI
+                    ALUOp_o = 2'b00;
+                    ALUSrc_o = 1'b1;
+                    MemRd_o = 1'b1;
+                    MemToReg_o = 1'b1;
+                    RegWrite_o = 1'b1;
+                    MemWr_o = 1'b0;
+                    immSelect_o = 1'b0;
+               end
+  
+  7'b0000011 : begin // JAL
+                    ALUOp_o = 2'b00;
+                    ALUSrc_o = 1'b1;
+                    MemRd_o = 1'b1;
+                    MemToReg_o = 1'b1;
+                    RegWrite_o = 1'b1;
+                    MemWr_o = 1'b0;
+                    immSelect_o = 1'b0;
+               end
+   
+  endcase
 
-  default : begin
-  ALUOp_o = 2'b11;
-  ALUSrc_o = 1'b1;
-  RegWrite_o = 1'b0;
-  MemRd_o = 1'b0;
-  MemWr_o = 1'b0;
-  MemToReg_o = 1'b0;
-  immSelect_o = 1'b0;
-  end
- endcase
 end
+    
 endmodule
+
