@@ -18,7 +18,9 @@ parameter OR  = 4'b0110;
 parameter AND = 4'b0111;
 parameter BLT = 4'b1000;
 parameter BGE = 4'b1001;
-
+//parameter LUI = 4'b1001;
+//parameter JAL = 4'b1001;
+  
 always@(*)begin
   
   case(ALUCtrl_i)
@@ -36,6 +38,8 @@ always@(*)begin
       AND     :  data_o = data1_i & data2_i;
       BLT     :  branch_flag_o = ($signed(data1_i) < $signed(data2_i)) 1 ? 0; 
       BGE     :  branch_flag_o = ($signed(data1_i) >= $signed(data2_i)) 1 ? 0;
+      LUI     :
+      JAL     :   
       default :  data_o = data1_i;
     
   endcase
