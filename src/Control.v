@@ -9,7 +9,7 @@ module Control
 always@(*)begin
  case(Op_i)
 
-  7'b0010011 : begin // I-Type
+  7'b0010011 : begin // I-Type, Redundant except for ALUSrc_o = 1
                     ALUOp_o = 2'b11;
                     ALUSrc_o = 1'b1;
                     RegWrite_o = 1'b1;
