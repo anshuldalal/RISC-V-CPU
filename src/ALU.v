@@ -2,22 +2,22 @@ module ALU
 (  
   input       [31:0]  data1_i, data2_i,
   //input       [ : ]   shamt,
-  input       [2:0]   ALUCtrl_i,
+  input       [3:0]   ALUCtrl_i,
   output reg  [31:0]  data_o,
+  output reg          branch_flag_o
   output reg          Zero_o
 );
   
-parameter ADD = 3'b001;
-parameter SUB = 3'b001;
-parameter SLL = 3'b010;
-parameter XOR = 3'b011;
-parameter SLR = 3'b100;
-parameter SRA = 3'b101;
-parameter OR  = 3'b110;
-parameter AND = 3'b111;
-parameter BLT = 3'b110;
-parameter BGE  = 3'b100;
-// might need 4 bits
+parameter ADD = 4'b0000;
+parameter SUB = 4'b0001;
+parameter SLL = 4'b0010;
+parameter XOR = 4'b0011;
+parameter SRL = 4'b0100;
+parameter SRA = 4'b0101;
+parameter OR  = 4'b0110;
+parameter AND = 4'b0111;
+parameter BLT = 4'b1000;
+parameter BGE = 4'b1001;
 
 always@(*)begin
   
@@ -25,26 +25,18 @@ always@(*)begin
     
       ADD     :  data_o = data1_i + data2_i;
       SUB     :  begin 
-                    // Zero_o   = (data1_i - data2_i)?0:1;
+                    Zero_o = (data1_i - data2_i) ? 0 : 1;
                     data_o = data1_i - data2_i; 
                  end
       SLL     :  data_o = data1_i << data2_i;
       XOR     :  data_o = data1_i ^ data2_i;
-      SLR     :  data_o = data1_i >> data2_i;
-      SRA     :  data_o = data1_i  data2_i;
+      SRL     :  data_o = data1_i >> data2_i;
+      SRA     :  data_o = $signed($signed(data1_i) >>> data2_i);
       OR      :  data_o = data1_i | data2_i;
       AND     :  data_o = data1_i & data2_i;
-      BLT     :  begin 
-                    // signed
-                    // Zero_o   = (data1_i - data2_i)?0:1;
-                    data_o = data1_i - data2_i; 
-                 end
-      BGE     :  begin 
-                    // signed
-                    // Zero_o   = (data1_i - data2_i)?0:1;
-                    data_o = data1_i - data2_i; 
-                 end
-      default : data_o = data1_i;
+      BLT     :  branch_flag_o = ($signed(data1_i) < $signed(data2_i)) 1 ? 0; 
+      BGE     :  branch_flag_o = ($signed(data1_i) >= $signed(data2_i)) 1 ? 0;
+      default :  data_o = data1_i;
     
   endcase
 
