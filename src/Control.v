@@ -10,7 +10,7 @@ always@(*)begin
  case(Op_i)
 
   7'b0010011 : begin // I-Type, Redundant except for ALUSrc_o = 1
-                    ALUOp_o = 2'b11;
+                    ALUOp_o = 2'b11;    // all instr of I and R-types have same funct_3
                     ALUSrc_o = 1'b1;
                     RegWrite_o = 1'b1;
                     MemRd_o = 1'b0;
@@ -62,8 +62,8 @@ always@(*)begin
   7'b0000011 : begin // LUI
                     ALUOp_o = 2'b00;
                     ALUSrc_o = 1'b1;
-                    MemRd_o = 1'b1;
-                    MemToReg_o = 1'b1;
+                    MemRd_o = 1'b0;
+                    MemToReg_o = 1'b0;
                     RegWrite_o = 1'b1;
                     MemWr_o = 1'b0;
                     immSelect_o = 1'b0;
@@ -71,12 +71,12 @@ always@(*)begin
   
   7'b0000011 : begin // JAL
                     ALUOp_o = 2'b00;
-                    ALUSrc_o = 1'b1;
-                    MemRd_o = 1'b1;
-                    MemToReg_o = 1'b1;
-                    RegWrite_o = 1'b1;
-                    MemWr_o = 1'b0;
-                    immSelect_o = 1'b0;
+                    ALUSrc_o = 1'b;
+                    MemRd_o = 1'b;
+                    MemToReg_o = 1'b;
+                    RegWrite_o = 1'b;
+                    MemWr_o = 1'b;
+                    immSelect_o = 1'b;
                end
    
   endcase
