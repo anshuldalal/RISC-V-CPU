@@ -33,7 +33,7 @@ always@(*)begin
                    endcase
                  end
     default : begin
-                ALUCtrl_o = 4'b0000;
+                ALUCtrl_o = 4'b0000;    // add for load and store instructions
               end
   endcase
 
