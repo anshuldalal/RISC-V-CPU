@@ -38,7 +38,7 @@ always@(*)begin
       AND     :  data_o = data1_i & data2_i;
       BLT     :  branch_flag_o = ($signed(data1_i) < $signed(data2_i)) 1 ? 0; 
       BGE     :  branch_flag_o = ($signed(data1_i) >= $signed(data2_i)) 1 ? 0;
-      LUI     :
+      LUI     :  data_o 
       JAL     :   
       default :  data_o = data1_i;
     
