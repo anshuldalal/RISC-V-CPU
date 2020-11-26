@@ -348,7 +348,9 @@ Sign_Extend Sign_Extend // Need to add more logic, Immediate select
     .data_o     (Sign_Extend_data_o)                // to ID_EX.SignExtended_i
 );
 
-// ============= EX Stage ======================================================================= //
+// ============= END of ID Stage ======================================================================= //   
+
+// ============= EX Stage ============================================================================== //
     
 ID_EX ID_EX
 (
@@ -388,7 +390,7 @@ ID_EX ID_EX
     .RTaddr_o           (ID_EX_RTaddr_o)
 );
 
-// --------- ALU ---------- /    
+// --------- ALU ---------- //    
     
 MUX32 MUX_ALUSrc // MUX to choose between Forwarded value and Immediate Value
 (
@@ -414,7 +416,7 @@ ALU ALU
     .Zero_o     (ALU_Zero_o)             //to EX_MEM.zero_i
 );
    
-// ------ Data Hazard Modules ------ /
+// ------ Data Hazard Modules ------ //
     
 HazradDetect HazradDetect   // Load-Use data hazards
 (
@@ -455,7 +457,7 @@ ForwardingMUX ForwardToData2
     .data_o   (ForwardToData2_data_o)
 );
 
-// -------- End of Hazard Modules =---------- / 
+// -------- End of Hazard Modules ---------- // 
     
 // ============= END of EX Stage ======================================================================== //    
     
