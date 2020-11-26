@@ -118,16 +118,20 @@ reg [3:0] vector_signed [0:2];
 reg easter_flag,easter_flag_next;
 reg [7:0] egg1,egg2,egg3;
 reg [2:0] easter_counter,easter_counter_next;
+    
 //------------------------- continuous assginment -------------------------------//
 
-assign RegEqual = (Registers_RSdata_o == Registers_RTdata_o);
-assign PC_Branch_Select = RegEqual & isBranch;
-assign isBranch = (IF_ID_inst_o[6:0]==7'b1100011)? 1'b1:1'b0;
-assign ALUfunct_in = {ID_EX_inst_o[31:25],ID_EX_inst_o[14:12]};
-assign pcIm = {inst[31],inst[7],inst[30:25],inst[11:8]};
-assign swIm = {inst[31:25],inst[11:7]};
+assign RegEqual = (Registers_RSdata_o == Registers_RTdata_o);   // Reg equality check
+assign PC_Branch_Select = RegEqual & isBranch;                  // Input to PC MUX
+    
+    // might have to change this logic to include additional logic for BLT, BGE, etc
+    
+assign isBranch = (IF_ID_inst_o[6:0]==7'b1100011)? 1'b1:1'b0;   // Opcode for Branch inst
+assign ALUfunct_in = {ID_EX_inst_o[31:25],ID_EX_inst_o[14:12]}; // { funct7, funct3 } 
+assign pcIm = {inst[31],inst[7],inst[30:25],inst[11:8]};        // Inst Immediate value for Branch Instructions
+assign swIm = {inst[31:25],inst[11:7]};                         // Immediate value for Store Instructions
 assign rst = reset;
-//assign op_selection = (DataOrReg)? reg_o : data_mem_o;//May28 removed.
+    
 assign toDataMemory = (EX_MEM_instr_o[6:0] == 7'b1010111)? 1 : 0; //NEW
 assign is_positive = is_positive_line[vout_addr];
 
@@ -168,7 +172,7 @@ always@(posedge clk_i or posedge reset )begin
     end
 end
 
-always@(posedge clk_i or posedge reset )begin
+always @(posedge clk_i or posedge reset )begin
     if(reset)begin
         easter_flag    <= 0;
         easter_counter <= 0;
@@ -189,9 +193,10 @@ always@(posedge clk_i or posedge reset )begin
     end
 end
 
-
+// Logic for JAL, LUI needed
+    
 //------------------------- Combinational Part -------------------------------//
-always@(*)begin
+always @(*) begin
     if(instr_i == 8'b1010_1010)easter_flag_next <= 1;
     else if(easter_counter == 3'd7)easter_flag_next <= 0;
          else                      easter_flag_next <= easter_flag;
@@ -200,7 +205,7 @@ always@(*)begin
     else easter_counter_next = easter_counter;
 end
 
-always@(*)begin
+always @(*) begin
     case(vout_addr)
         2'b00:value_o   = (DataOrReg)? reg_o[7:0]   : data_mem_o[7:0];
         2'b01:value_o   = (DataOrReg)? reg_o[15:8]  : data_mem_o[15:8];
@@ -209,14 +214,10 @@ always@(*)begin
     endcase
 end
 
-MUX32 pcSelect(
-    .data1_i    (addPC),
-    .data2_i    (AddSum_data_o),//branch value
-    .select_i   (isBranch),
-    .data_o     (pcSelect_data_o)
-);
+// ============= IF Stage ===================================================================== //
 
-PC PC(
+PC PC
+(
     .clk_i      (clk_i),
     .start_i    (start_i),
     .pc_i       (pcSelect_data_o),
@@ -224,14 +225,8 @@ PC PC(
     .pc_o       (inst_addr)
 );
 
-Adder Add_PC(
-    .data1_in   (inst_addr),
-    .data2_in   (32'd4),
-    .data_o     (addPC)              //to IF_ID.pc_i
-);
-
-
-Instruction_Memory Instruction_Memory(
+Instruction_Memory Instruction_Memory
+(
     .clk        (clk_i),
     .reset      (rst),
     .addr_i     (inst_addr), 
@@ -239,162 +234,199 @@ Instruction_Memory Instruction_Memory(
     .instr_o    (inst)          //to IF_ID.inst_i
 );
 
-//AddSum was in EX stage initally, but moved to IF stage.
-ALU AddSum(
+IF_ID IF_ID
+(
+    .clk_i      (clk_i),
+    .start_i    (start_i),
+    .pc_i       (inst_addr),
+    .inst_i     (inst), 
+    .hazard_i   (HazradDetect_Hazard_o),
+    .flush_i    (PC_Branch_Select),
+    .pcIm_i     (pcIm),
+    .pcIm_o     (IF_ID_pcIm_o),
+    .pc_o       (IF_ID_pc_o),       //to ID_EX.pc_i
+    .inst_o     (IF_ID_inst_o)      //to ID_EX.inst_i
+);
+    
+Adder Add_PC       // Adder for PC+4
+(
+    .data1_in   (inst_addr),
+    .data2_in   (32'd4),
+    .data_o     (addPC)              //to IF_ID.pc_i
+);
+
+Sign_Extend PCImmExtend             // Need to include more functionalities
+(
+    .select_i   (1'b0),
+    .data0_i    (IF_ID_pcIm_o),
+    .data1_i    (12'b0),
+    .data_o     (PCImmExtend_data_o)  //to ID_EX.pcEx_i
+);
+    
+Shift1 shiftLeft        // Alignment ???????
+(
+    .data_i     (PCImmExtend_data_o),   // shift left by 1 bit
+    .data_o     (shiftLeft_data_o)
+);
+
+// additional MUX required to choose between JAL and Branch    
+ALU AddSum      // Adder for Effective branch address
+(
     .data1_i    (IF_ID_pc_o),
-    .data2_i    (shiftLeft_data_o),
+    .data2_i    (shiftLeft_data_o), 
     .ALUCtrl_i  (3'b001),
-    .data_o     (AddSum_data_o),
+    .data_o     (AddSum_data_o),    // PC + Branch Offset effective branch address
     .Zero_o     ()
 );
 
-//the following two function is for branch judgement
-Shift1 shiftLeft(
-    .data_i (PCImmExtend_data_o),
-    .data_o(shiftLeft_data_o)
+// Have to include MUX, similar logic for JAL    
+
+MUX32 pcSelect  // MUX for PC + 4 and PC + Branch offset
+(
+    .data1_i    (addPC),
+    .data2_i    (AddSum_data_o),    //effective branch address
+    .select_i   (isBranch),
+    .data_o     (pcSelect_data_o)
+);
+    
+// ============ END of IF Stage ============================================================== //    
+    
+// ============ ID Stage ===================================================================== //    
+Control Control
+(
+    .Op_i         (IF_ID_inst_o[6:0]),      // opcode
+    .ALUOp_o      (Control_ALUOp_o),        //to ID_EX.ALUOp_i
+    .ALUSrc_o     (Control_ALUSrc_o),       //to ID_EX.ALUSrc_i
+    .RegWrite_o   (Control_RegWrite_o),     //to ID_EX.RegWrite_i
+    .MemRd_o      (Control_MemRd_o),        //to ID_EX.MemRead_i
+    .MemWr_o      (Control_MemWr_o),        //to ID_EX.MemWrite_i
+    .MemToReg_o   (Control_MemToReg_o),     //to ID_EX.MemToReg_i
+    .immSelect_o  (Control_immSelect_o)     //to Sign_Extend.select_i
 );
 
-Sign_Extend PCImmExtend(
-    .select_i   (1'b0),
-    .data0_i     (IF_ID_pcIm_o),
-    .data1_i     (12'b0),
-    .data_o     (PCImmExtend_data_o)  //to ID_EX.pcEx_i
+MUX_Control MUX_Control
+(
+    .Hazard_i     (HazradDetect_Hazard_o), 
+    .RegDst_i     (IF_ID_inst_o[11:7]),  
+    .ALUOp_i      (Control_ALUOp_o), 
+    .ALUSrc_i     (Control_ALUSrc_o),  
+    .RegWrite_i   (Control_RegWrite_o), 
+    .MemToReg_i   (Control_MemToReg_o), 
+    .MemRead_i    (Control_MemRd_o),
+    .MemWrite_i   (Control_MemWr_o),
+    .RegDst_o     (MUX_Control_RegDst_o),  
+    .ALUOp_o      (MUX_Control_ALUOp_o), 
+    .ALUSrc_o     (MUX_Control_ALUSrc_o),  
+    .RegWrite_o   (MUX_Control_RegWrite_o), 
+    .MemToReg_o   (MUX_Control_MemToReg_o),  
+    .MemRead_o    (MUX_Control_MemRead_o),
+    .MemWrite_o   (MUX_Control_MemWrite_o)  
 );
-//
+    
+Registers RegisterFile
+(
+    .clk_i        (clk_i),
+    .reset        (rst),
+    .op_address   (address),
+    .RSaddr_i     (IF_ID_inst_o[19:15]),     
+    .RTaddr_i     (IF_ID_inst_o[24:20]),     
+    .RDaddr_i     (MEM_WB_RDaddr_o), 
+    .RDdata_i     (memToReg_data_o),
+    .RegWrite_i   (MEM_WB_RegWrite_o), 
+    .is_pos_i     (vector_signed[1]),
+    .RSdata_o     (Registers_RSdata_o),         //to ID_EX.RDData0_i
+    .RTdata_o     (Registers_RTdata_o),         //to ID_EX.RDData1_i
+    .reg_o        (reg_o),
+    .pos_o        (is_positive_line)
+); 
 
-IF_ID IF_ID(
-    .clk_i  (clk_i),
-    .start_i    (start_i),
-    .pc_i   (inst_addr),
-    .inst_i (inst), 
-    .hazard_i   (HazradDetect_Hazard_o),
-    .flush_i    (PC_Branch_Select),
-    .pcIm_i (pcIm),
-    .pcIm_o (IF_ID_pcIm_o),
-    .pc_o   (IF_ID_pc_o),     //to ID_EX.pc_i
-    .inst_o (IF_ID_inst_o)      //to ID_EX.inst_i
-);
-
-Control Control(
-    .Op_i       (IF_ID_inst_o[6:0]),
-    .ALUOp_o    (Control_ALUOp_o),             //to ID_EX.ALUOp_i
-    .ALUSrc_o   (Control_ALUSrc_o),             //to ID_EX.ALUSrc_i
-    .RegWrite_o (Control_RegWrite_o),             //to ID_EX.RegWrite_i
-    .MemRd_o    (Control_MemRd_o),             //to ID_EX.MemRead_i
-    .MemWr_o    (Control_MemWr_o),             //to ID_EX.MemWrite_i
-    .MemToReg_o   (Control_MemToReg_o),              //to ID_EX.MemToReg_i
-    .immSelect_o  (Control_immSelect_o)             //to Sign_Extend.select_i
-);
-
-Registers Registers(
-    .clk_i      (clk_i),
-    .reset      (rst),
-    .op_address (address),
-    .RSaddr_i   (IF_ID_inst_o[19:15]),     
-    .RTaddr_i   (IF_ID_inst_o[24:20]),     
-    .RDaddr_i   (MEM_WB_RDaddr_o), 
-    .RDdata_i   (memToReg_data_o),
-    .RegWrite_i (MEM_WB_RegWrite_o), 
-    .is_pos_i   (vector_signed[1]),
-    .RSdata_o   (Registers_RSdata_o),                  //to ID_EX.RDData0_i
-    .RTdata_o   (Registers_RTdata_o),                  //to ID_EX.RDData1_i
-    .reg_o      (reg_o),
-    .pos_o      (is_positive_line)
+Sign_Extend Sign_Extend // Need to add more logic, Immediate select 
+(
+    .select_i   (Control_immSelect_o),              //select=1 for sw,0 for others
+    .data0_i    (IF_ID_inst_o[31:20]),             // regular immediate
+    .data1_i    ({IF_ID_inst_o[31:25],IF_ID_inst_o[11:7]}),    // store
+    .data_o     (Sign_Extend_data_o)                // to ID_EX.SignExtended_i
 );
 
-
-Sign_Extend Sign_Extend(
-    .select_i   (Control_immSelect_o), //select=1 for sw,0 for others
-    .data0_i     (IF_ID_inst_o[31:20]),
-    .data1_i     ({IF_ID_inst_o[31:25],IF_ID_inst_o[11:7]}),
-    .data_o     (Sign_Extend_data_o)   // to ID_EX.SignExtended_i
-);
-
-ID_EX ID_EX(
-    .clk_i  (clk_i),
-    .start_i    (start_i),
-    .inst_i (IF_ID_inst_o),
-    .pc_i   (IF_ID_pc_o),
-    .pcEx_i(PCImmExtend_data_o),//useless for now
-    .RDData0_i  (Registers_RSdata_o),
-    .RDData1_i  (Registers_RTdata_o),
-    .SignExtended_i (Sign_Extend_data_o),
-    .RegDst_i   (MUX_Control_RegDst_o),
-    .ALUOp_i    (MUX_Control_ALUOp_o),
-    .ALUSrc_i   (MUX_Control_ALUSrc_o),
-    .RegWrite_i (MUX_Control_RegWrite_o),
-    .MemToReg_i (MUX_Control_MemToReg_o),
-    .MemRead_i  (MUX_Control_MemRead_o),
-    .MemWrite_i  (MUX_Control_MemWrite_o),
+// ============= EX Stage ======================================================================= //
+    
+ID_EX ID_EX
+(
+    .clk_i              (clk_i),
+    .start_i            (start_i),
+    .inst_i             (IF_ID_inst_o),
+    .pc_i               (IF_ID_pc_o),
+    .pcEx_i             (PCImmExtend_data_o),//useless for now
+    .RDData0_i          (Registers_RSdata_o),
+    .RDData1_i          (Registers_RTdata_o),
+    .SignExtended_i     (Sign_Extend_data_o),
+    .RegDst_i           (MUX_Control_RegDst_o),
+    .ALUOp_i            (MUX_Control_ALUOp_o),
+    .ALUSrc_i           (MUX_Control_ALUSrc_o),
+    .RegWrite_i         (MUX_Control_RegWrite_o),
+    .MemToReg_i         (MUX_Control_MemToReg_o),
+    .MemRead_i          (MUX_Control_MemRead_o),
+    .MemWrite_i         (MUX_Control_MemWrite_o),
     .PC_branch_select_i (PC_Branch_Select),//useless
-    .RSaddr_i   (IF_ID_inst_o[19:15]),     
-    .RTaddr_i   (IF_ID_inst_o[24:20]),
-    .inst_o (ID_EX_inst_o),     
-    .pc_o   (ID_EX_pc_o),             //to EX_MEM.pc_i
-    .pcEx_o (),             //to shiftLeft.data_i
-    .RDData0_o  (ID_EX_RDData0_o),         //to ALU.data1_i
-    .RDData1_o  (ID_EX_RDData1_o),         //to EX_MEM.RDData_i
-    .SignExtended_o (ID_EX_SignExtended_o),     //to MEX_ALUSrc.data2_i
-    .RegDst_o   (ID_EX_RegDst_o),         //to EX_MEM.RDaddr_i
-    .ALUOp_o    (ID_EX_ALUOp_o),         //to ALU_Control.ALUOp_i
-    .ALUSrc_o   (ID_EX_ALUSrc_o),         //to ALUSrc.select_i
-    .RegWrite_o (ID_EX_RegWrite_o),         //to EX_MEM.RegWrite_i
-    .MemToReg_o (ID_EX_MemToReg_o),         //to EX_MEM.MemToReg_i
-    .MemRead_o  (ID_EX_MemRead_o),         //to EX_MEM..MemRead_i
-    .MemWrite_o (ID_EX_MemWrite_o),         //to EX_MEM.MemWrite_i
+    .RSaddr_i           (IF_ID_inst_o[19:15]),     
+    .RTaddr_i           (IF_ID_inst_o[24:20]),
+    .inst_o             (ID_EX_inst_o),     
+    .pc_o               (ID_EX_pc_o),               //to EX_MEM.pc_i
+    .pcEx_o             (),                         //to shiftLeft.data_i
+    .RDData0_o          (ID_EX_RDData0_o),          //to ALU.data1_i
+    .RDData1_o          (ID_EX_RDData1_o),          //to EX_MEM.RDData_i
+    .SignExtended_o     (ID_EX_SignExtended_o),     //to MEX_ALUSrc.data2_i
+    .RegDst_o           (ID_EX_RegDst_o),           //to EX_MEM.RDaddr_i
+    .ALUOp_o            (ID_EX_ALUOp_o),            //to ALU_Control.ALUOp_i
+    .ALUSrc_o           (ID_EX_ALUSrc_o),           //to ALUSrc.select_i
+    .RegWrite_o         (ID_EX_RegWrite_o),         //to EX_MEM.RegWrite_i
+    .MemToReg_o         (ID_EX_MemToReg_o),         //to EX_MEM.MemToReg_i
+    .MemRead_o          (ID_EX_MemRead_o),          //to EX_MEM..MemRead_i
+    .MemWrite_o         (ID_EX_MemWrite_o),         //to EX_MEM.MemWrite_i
     .PC_branch_select_o (),
-    .RSaddr_o(ID_EX_RSaddr_o),
-    .RTaddr_o(ID_EX_RTaddr_o)
+    .RSaddr_o           (ID_EX_RSaddr_o),
+    .RTaddr_o           (ID_EX_RTaddr_o)
 );
 
-MUX32 MUX_ALUSrc(
-    .data1_i    (ForwardToData2_data_o),
-    .data2_i    (ID_EX_SignExtended_o),
+// --------- ALU ---------- /    
+    
+MUX32 MUX_ALUSrc // MUX to choose between Forwarded value and Immediate Value
+(
+    .data1_i    (ForwardToData2_data_o), // from forwarding MUX
+    .data2_i    (ID_EX_SignExtended_o),  // sign extended immediate   
     .select_i   (ID_EX_ALUSrc_o),
     .data_o     (MUX_ALUSrc_data_o)
 );
 
-ALU_Control ALU_Control(
-    .funct_i    (ALUfunct_in),
-    .ALUOp_i    (ID_EX_ALUOp_o),
-    .ALUCtrl_o  (ALU_Control_ALUCtrl_o)
+ALU_Control ALU_Control
+(
+    .funct_i    (ALUfunct_in),              // funct7 + funct3
+    .ALUOp_i    (ID_EX_ALUOp_o),            // ALUOp from control unit
+    .ALUCtrl_o  (ALU_Control_ALUCtrl_o)     // ALU Control Lines
 );
 
-ALU ALU(
-    .data1_i    (ForwardToData1_data_o),
-    .data2_i    (MUX_ALUSrc_data_o),
+ALU ALU
+(
+    .data1_i    (ForwardToData1_data_o), // from forwarding MUX
+    .data2_i    (MUX_ALUSrc_data_o),     // from ALU Source MUX <== forwarding MUX  
     .ALUCtrl_i  (ALU_Control_ALUCtrl_o),
-    .data_o     (ALU_data_o),         //to EX_MEM.ALUResult_i    &    EX_MEM.RDaddr_i
-    .Zero_o     (ALU_Zero_o)          //to EX_MEM.zero_i
+    .data_o     (ALU_data_o),            //to EX_MEM.ALUResult_i    &    EX_MEM.RDaddr_i
+    .Zero_o     (ALU_Zero_o)             //to EX_MEM.zero_i
 );
-
-HazradDetect HazradDetect(
-    .IF_IDrs1_i  (IF_ID_inst_o[24:20]),
-    .IF_IDrs2_i  (IF_ID_inst_o[19:15]),
-    .ID_EXrd_i  (IF_ID_inst_o[19:15]),
-    .ID_EX_MemRead_i    (ID_EX_MemRead_o),
+   
+// ------ Data Hazard Modules ------ /
+    
+HazradDetect HazradDetect   // Load-Use data hazards
+(
+    .IF_ID_RS_i  (IF_ID_inst_o[24:20]),     // RT, instead of RS
+    .IF_ID_RT_i  (IF_ID_inst_o[19:15]),     // RT, rs1
+    .ID_EX_RD_i  (IF_ID_inst_o[19:15]),     // why same input here ??????
+    .ID_EX_MemRead_i  (ID_EX_MemRead_o),
     .Hazard_o   (HazradDetect_Hazard_o)
 );
 
-MUX_Control MUX_Control(
-    .Hazard_i   (HazradDetect_Hazard_o), 
-    .RegDst_i   (IF_ID_inst_o[11:7]),  
-    .ALUOp_i    (Control_ALUOp_o), 
-    .ALUSrc_i   (Control_ALUSrc_o),  
-    .RegWrite_i (Control_RegWrite_o), 
-    .MemToReg_i     (Control_MemToReg_o), 
-    .MemRead_i  (Control_MemRd_o),
-    .MemWrite_i     (Control_MemWr_o),
-    .RegDst_o   (MUX_Control_RegDst_o),  
-    .ALUOp_o    (MUX_Control_ALUOp_o), 
-    .ALUSrc_o   (MUX_Control_ALUSrc_o),  
-    .RegWrite_o     (MUX_Control_RegWrite_o), 
-    .MemToReg_o     (MUX_Control_MemToReg_o),  
-    .MemRead_o  (MUX_Control_MemRead_o),
-    .MemWrite_o     (MUX_Control_MemWrite_o)  
-);
-
-ForwardingUnit ForwardingUnit(
+ForwardingUnit ForwardingUnit //  Data Forwarding Unit
+(
     .EX_MEM_RegWrite_i (EX_MEM_RegWrite_o),
     .EX_MEM_RD_i       (EX_MEM_RDaddr_o),
     .ID_EX_RS_i        (ID_EX_RSaddr_o),
@@ -405,50 +437,60 @@ ForwardingUnit ForwardingUnit(
     .ForwardB_o        (ForwardingUnit_ForwardB_o)
 );
 
-ForwardingMUX ForwardToData1(
+ForwardingMUX ForwardToData1
+(
     .select_i (ForwardingUnit_ForwardA_o),
-    .data_i   (ID_EX_RDData0_o),
-    .EX_MEM_i (EX_MEM_ALUResult_o),
-    .MEM_WB_i (memToReg_data_o),
+    .data_i   (ID_EX_RDData0_o),    // from reg in ID stage
+    .EX_MEM_i (EX_MEM_ALUResult_o), // from MEM stage result from ALU 
+    .MEM_WB_i (memToReg_data_o),    // from WB stage
     .data_o   (ForwardToData1_data_o)
 );
 
-ForwardingMUX ForwardToData2(
+ForwardingMUX ForwardToData2
+(
     .select_i (ForwardingUnit_ForwardB_o),
-    .data_i   (ID_EX_RDData1_o),
-    .EX_MEM_i (EX_MEM_ALUResult_o),
-    .MEM_WB_i (memToReg_data_o),
+    .data_i   (ID_EX_RDData1_o),    // from reg in ID stage
+    .EX_MEM_i (EX_MEM_ALUResult_o), // from MEM stage result from ALU 
+    .MEM_WB_i (memToReg_data_o),    // from WB stage
     .data_o   (ForwardToData2_data_o)
 );
 
-EX_MEM EX_MEM(
-    .clk_i  (clk_i),
-    .start_i    (start_i),
-    .pc_i   (ID_EX_pc_o),
-    .zero_i (ALU_Zero_o),
-    .ALUResult_i    (ALU_data_o),
+// -------- End of Hazard Modules =---------- / 
+    
+// ============= END of EX Stage ======================================================================== //    
+    
+// ============= MEM Stage ============================================================================= // 
+    
+EX_MEM EX_MEM
+(
+    .clk_i        (clk_i),
+    .start_i      (start_i),
+    .pc_i         (ID_EX_pc_o),
+    .zero_i       (ALU_Zero_o),
+    .ALUResult_i  (ALU_data_o),
     .VALUResult_i (VALU_v_o), //NEW
-    .RDData_i   (ForwardToData2_data_o),//Reg read data2
-    .RDaddr_i   (ID_EX_RegDst_o),//from IF_ID.inst_o[11:7]
-    .RegWrite_i (ID_EX_RegWrite_o),
-    .MemToReg_i (ID_EX_MemToReg_o),
-    .MemRead_i  (ID_EX_MemRead_o),
-    .MemWrite_i (ID_EX_MemWrite_o),
-    .instr_i(ID_EX_inst_o),
-    .instr_o(EX_MEM_instr_o),
-    .pc_o   (),
-    .zero_o (),
-    .ALUResult_o    (EX_MEM_ALUResult_o),
+    .RDData_i     (ForwardToData2_data_o),//Reg read data2
+    .RDaddr_i     (ID_EX_RegDst_o),//from IF_ID.inst_o[11:7]
+    .RegWrite_i   (ID_EX_RegWrite_o),
+    .MemToReg_i   (ID_EX_MemToReg_o),
+    .MemRead_i    (ID_EX_MemRead_o),
+    .MemWrite_i   (ID_EX_MemWrite_o),
+    .instr_i      (ID_EX_inst_o),
+    .instr_o      (EX_MEM_instr_o),
+    .pc_o         (),
+    .zero_o       (),
+    .ALUResult_o  (EX_MEM_ALUResult_o),
     .VALUResult_o (EX_MEM_VALUResult_o), //NEW         //to MEM_WB.ALUResult_i
-    .RDData_o   (EX_MEM_RDData_o),             //to MEM_WB.RDData_i
-    .RDaddr_o   (EX_MEM_RDaddr_o),             //to MEM_WB.RDaddr_i 
-    .RegWrite_o (EX_MEM_RegWrite_o),             //to MEM_WB.RegWrite_i
-    .MemToReg_o (EX_MEM_MemToReg_o),             //to MEM_WB.MemToReg_i
-    .MemRead_o  (EX_MEM_MemRead_o),             //to Data_Memory.MemRead_i
-    .MemWrite_o (EX_MEM_MemWrite_o)              //to Data_Memory.MemWrite_i
+    .RDData_o     (EX_MEM_RDData_o),             //to MEM_WB.RDData_i
+    .RDaddr_o     (EX_MEM_RDaddr_o),             //to MEM_WB.RDaddr_i 
+    .RegWrite_o   (EX_MEM_RegWrite_o),             //to MEM_WB.RegWrite_i
+    .MemToReg_o   (EX_MEM_MemToReg_o),             //to MEM_WB.MemToReg_i
+    .MemRead_o    (EX_MEM_MemRead_o),             //to Data_Memory.MemRead_i
+    .MemWrite_o   (EX_MEM_MemWrite_o)              //to Data_Memory.MemWrite_i
 );
 
-Data_Memory Data_Memory(
+Data_Memory Data_Memory
+(
     .clk_i      (clk_i),
     .reset      (rst),
     .op_addr    (address),
@@ -460,32 +502,40 @@ Data_Memory Data_Memory(
     .data_mem_o (data_mem_o)
 );
 
-MEM_WB MEM_WB(
-    .clk_i  (clk_i),
-    .start_i    (start_i),
+// ============= END of MEM Stage ===================================================================== //    
+
+// ============= WB Stage ============================================================================= //    
+MEM_WB MEM_WB
+(
+    .clk_i              (clk_i),
+    .start_i            (start_i),
     //.ALUResult_i    (EX_MEM_ALUResult_o),
-    .ALUResult_i    (aluToDM_data_o),
-    .RDData_i   (EX_MEM_RDData_o),
-    .RDaddr_i   (EX_MEM_RDaddr_o),
-    .RegWrite_i (EX_MEM_RegWrite_o),
-    .MemToReg_i (EX_MEM_MemToReg_o),
-    .DataMemReadData_i(Data_Memory_data_o),
-    .ALUResult_o    (MEM_WB_ALUResult_o),
-    .RDData_o   (),         //to memToReg.data1_i
-    .RDaddr_o   (MEM_WB_RDaddr_o),         
-    .RegWrite_o (MEM_WB_RegWrite_o),         //to Registera.RegWrite_i
-    .MemToReg_o (MEM_WB_MemToReg_o),          //to memToReg.select_i
-    .DataMemReadData_o(MEM_WB_DataMemReadData_o)
+    .ALUResult_i        (aluToDM_data_o),
+    .RDData_i           (EX_MEM_RDData_o),
+    .RDaddr_i           (EX_MEM_RDaddr_o),
+    .RegWrite_i         (EX_MEM_RegWrite_o),
+    .MemToReg_i         (EX_MEM_MemToReg_o),
+    .DataMemReadData_i  (Data_Memory_data_o),
+    .ALUResult_o        (MEM_WB_ALUResult_o),
+    .RDData_o           (),         //to memToReg.data1_i
+    .RDaddr_o           (MEM_WB_RDaddr_o),         
+    .RegWrite_o         (MEM_WB_RegWrite_o),         //to Registera.RegWrite_i
+    .MemToReg_o         (MEM_WB_MemToReg_o),          //to memToReg.select_i
+    .DataMemReadData_o  (MEM_WB_DataMemReadData_o)
 );
 
-MUX32 memToReg(
+MUX32 memToReg
+(
     .data1_i    (MEM_WB_ALUResult_o),
     .data2_i    (MEM_WB_DataMemReadData_o),
     .select_i   (MEM_WB_MemToReg_o),//MemToReg control
     .data_o     (memToReg_data_o)
 );
 
-MUX32 aluToDM( //NEW module: to decide if addr_i in Data_Memory comes from ALU or VALU
+// ============= END of WB Stage ======================================================================== //    
+// ===== need to remove modules below ===============//    
+MUX32 aluToDM //NEW module: to decide if addr_i in Data_Memory comes from ALU or VALU
+( 
     .data1_i(EX_MEM_ALUResult_o),
     .data2_i(EX_MEM_VALUResult_o),
     .select_i(toDataMemory), //NEW, no change in MUX32.v
